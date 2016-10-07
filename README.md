@@ -29,7 +29,7 @@ install the `lumi2d` program in the appropiate path.
 
 ## Usage
 
-````Shell
+````Text
 usage: lumi2d [-h] [-gev GEV] [-bins BINS] [-format FORMAT] pdfname channel
 
 Creates a 2D mx-y luminosity uncertainty plot.
@@ -52,7 +52,7 @@ By running:
 ````Shell
 $ lumi2d PDF4LHC15_nnlo_mc gg
 ```
-we obtain:
+We obtain:
 
 ![alt text](https://github.com/scarrazza/lumi2d/raw/master/extra/PDF4LHC15_nnlo_mc_gg_13000.0.png "Logo")
 
