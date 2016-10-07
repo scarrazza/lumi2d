@@ -1,0 +1,145 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Creates a 2D mx-y luminosity uncertainty plot
+"""
+
+__author__  = "Stefano Carrazza"
+__version__ = "1.0.0"
+__url__ = 'https://github.com/scarrazza/lumi2d'
+
+import sys
+import argparse
+import lhapdf
+import numpy as np
+
+#######################################################################
+## Luminosity definitions following eq. (2) and (4) of arXiv:1607.01831
+def gg(pdf, mx, y, s):
+    x1 = mx/s**0.5*np.exp(y)
+    x2 = mx/s**0.5*np.exp(-y)    
+    return 1.0/s*pdf.xfxQ(21,x1,mx)/x1*pdf.xfxQ(21,x2,mx)/x2
+
+def gq(pdf, mx, y, s):
+    x1 = mx/s**0.5*np.exp(y)
+    x2 = mx/s**0.5*np.exp(-y)
+    pdfs = 0
+    for i in [-5,-4,-3,-2,-1,1,2,3,4,5]:
+        pdfs += pdf.xfxQ(i, x1, mx)*pdf.xfxQ(21, x2, mx) + pdf.xfxQ(21, x1, mx)*pdf.xfxQ(i, x2, mx)
+    return 1.0/s*pdfs/x1/x2
+
+def qqbar(pdf, mx, y, s):
+    x1 = mx/s**0.5*np.exp(y)
+    x2 = mx/s**0.5*np.exp(-y)
+    pdfs = 0
+    for i in [-5,-4,-3,-2,-1,1,2,3,4,5]:
+        pdfs += pdf.xfxQ(i, x1, mx)*pdf.xfxQ(-i, x2, mx)
+    return 1.0/s*pdfs/x1/x2
+
+def qq(pdf, mx, y, s):
+    x1 = mx/s**0.5*np.exp(y)
+    x2 = mx/s**0.5*np.exp(-y)
+    pdfs = 0
+    for i in [-5,-4,-3,-2,-1,1,2,3,4,5]:
+        for j in [-5,-4,-3,-2,-1,1,2,3,4,5]:        
+            pdfs += pdf.xfxQ(i, x1, mx)*pdf.xfxQ(j, x2, mx)
+    return 1.0/s*pdfs/x1/x2
+
+def udbar(pdf, mx, y, s):
+    x1 = mx/s**0.5*np.exp(y)
+    x2 = mx/s**0.5*np.exp(-y)
+    pdfs = pdf.xfxQ(2,x1,mx)*pdf.xfxQ(-1,x2,mx) + pdf.xfxQ(-1,x1,mx)*pdf.xfxQ(2,x2,mx)
+    return 1.0/s*pdfs/x1/x2
+
+def dubar(pdf, mx, y, s):
+    x1 = mx/s**0.5*np.exp(y)
+    x2 = mx/s**0.5*np.exp(-y)
+    pdfs = pdf.xfxQ(1,x1,mx)/x1*pdf.xfxQ(-2,x2,mx) + pdf.xfxQ(-2,x1,mx)/x1*pdf.xfxQ(1,x2,mx)
+    return 1.0/s*pdfs/x1/x2
+
+#######################################################################
+## main code
+def main():
+    
+    args = parse_args()
+
+    print('\n lumi2d v%s @ %s\n' % (__version__,__url__))
+    print(args)
+    
+    pdfname = args.pdfname
+    pdf = lhapdf.mkPDFs(pdfname)
+
+    sqrt = float(args.gev)
+
+    s = sqrt**2
+    mx = np.logspace(1, np.log10(1e4), args.bins)
+    y  = np.linspace( -5, 5, args.bins)
+    y_max = [-0.5*np.log(imx**2/s) for imx in mx]
+
+    from ROOT import TH2F, TCanvas, gStyle, TColor, TLegend, TLatex
+    h = TH2F('h','%s-luminosity relative uncertainty (%%)' % args.channel, len(y)-1, y, len(mx)-1, mx)
+
+    for i, imx in enumerate(mx):
+        for iy in y:
+            if np.abs(iy) <= y_max[i]:
+                obs = []
+                for irep in range(len(pdf)):
+                    obs.append(getattr(sys.modules[__name__],args.channel)(pdf[irep],imx,iy,s))
+                uset = pdf[0].set().uncertainty(obs)
+                h.Fill(iy, imx, np.abs(uset.errsymm/uset.central*100))
+
+    # plot
+    c = TCanvas()
+    c.SetLogy()
+    c.SetTickx()
+    c.SetTicky()
+
+    stops = np.array([ 0.0000, 0.1250, 0.2500, 0.3750, 0.5000, 0.6250, 0.7500, 0.8750, 1.0000])
+    red   = np.array([ 1, 0.0592, 0.0780, 0.0232, 0.1802, 0.5301, 0.8186, 0.9956, 0.9764])
+    green = np.array([ 1, 0.3599, 0.5041, 0.6419, 0.7178, 0.7492, 0.7328, 0.7862, 0.9832])
+    blue  = np.array([ 1, 0.8684, 0.8385, 0.7914, 0.6425, 0.4662, 0.3499, 0.1968, 0.0539])
+    TColor.CreateGradientColorTable(len(stops), stops, red, green, blue, 255);
+
+    h.SetContour(99)
+    h.Draw("cont4z1")
+    h.GetZaxis().SetRangeUser(0,50);
+    h.GetXaxis().SetTitle("y");
+    h.GetXaxis().CenterTitle(True);
+    h.GetYaxis().SetTitle("M_{X} (GeV)");
+    h.GetYaxis().CenterTitle(True);
+    gStyle.SetOptStat(0);
+
+    leg = TLegend(0.034,0.76,0.418,0.87)
+    leg.SetFillStyle(0)
+    leg.SetBorderSize(0)
+    leg.AddEntry('', pdfname,'')
+    leg.AddEntry('', '#sqrt{s} = %.1f TeV' % (sqrt/1e3),'')
+    leg.Draw()
+
+    l = TLatex()
+    l.SetTextSize(0.025)
+    l.SetTextAngle(90)
+    l.SetNDC()
+    l.SetTextFont(72)
+    l.SetTextColor(TColor.kGray)
+    l.DrawLatex(0.995, 0.30, __url__)
+
+    c.SaveAs(pdfname + '_' + args.channel + '_'+ str(sqrt) + '.' + args.format)
+
+def parse_args():
+    """prepare arg parser"""
+    parser = argparse.ArgumentParser(
+        description="Creates a 2D mx-y luminosity uncertainty plot.",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument('pdfname', help="the LHAPDF pdf set name.")
+    parser.add_argument('channel', help="the luminosity channel: gg,gq,qq,qqbar,udbar,dubar")    
+    parser.add_argument('-gev', help="the sqrts energy for the luminosity (default 13000).",
+                        default=13000, type=float)
+    parser.add_argument('-bins', help="the number of bins in y and mx (default 100).",
+                        default=100, type=int)    
+    parser.add_argument('-format', help="the plot output format (default png).", default='png')        
+    return parser.parse_args()
+    
+if __name__ == '__main__':
+    main()
