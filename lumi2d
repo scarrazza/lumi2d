@@ -54,7 +54,7 @@ def udbar(pdf, mx, y, s):
 def dubar(pdf, mx, y, s):
     x1 = mx/s**0.5*np.exp(y)
     x2 = mx/s**0.5*np.exp(-y)
-    pdfs = pdf.xfxQ(1,x1,mx)/x1*pdf.xfxQ(-2,x2,mx) + pdf.xfxQ(-2,x1,mx)/x1*pdf.xfxQ(1,x2,mx)
+    pdfs = pdf.xfxQ(1,x1,mx)*pdf.xfxQ(-2,x2,mx) + pdf.xfxQ(-2,x1,mx)*pdf.xfxQ(1,x2,mx)
     return 1.0/s*pdfs/x1/x2
 
 #######################################################################
